@@ -15,6 +15,7 @@ func main() {
 	switch command := os.Args[2]; command {
 	case "init":
 		fmt.Printf("init command")
+		must(initCMD())
 	case "cat-file":
 		fmt.Printf("cat-file command")
 	case "hash-object":
