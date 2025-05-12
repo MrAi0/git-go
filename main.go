@@ -7,7 +7,7 @@ import (
 
 func main() {
 
-	if len(os.Args) < 2 {
+	if len(os.Args) < 3 {
 		errorPrintf("usage: mygit <command> [<args>...]")
 		os.Exit(1)
 	}
@@ -18,6 +18,14 @@ func main() {
 		must(initCMD())
 	case "cat-file":
 		fmt.Printf("cat-file command")
+		if len(os.Args) != 5 {
+			must(fmt.Errorf("usage: mygit cat-file <flag> <file>"))
+		}
+
+		if os.Args[3] != "-p" {
+			must(fmt.Errorf("usage: mygit cat-file -p <file>"))
+		}
+		must(catFileCMD(os.Args[4]))
 	case "hash-object":
 		fmt.Printf("hash-object command")
 	case "ls-tree":
