@@ -48,6 +48,7 @@ func readFile(r io.Reader) ([]byte, string, error) {
 		if str == 0 {
 			break
 		}
+		pos++
 	}
 
 	parts := bytes.Split(decompressedData[0:pos], []byte{' '})
