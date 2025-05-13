@@ -27,7 +27,15 @@ func main() {
 		}
 		must(catFileCMD(os.Args[4]))
 	case "hash-object":
+		if len(os.Args) != 5 {
+			must(fmt.Errorf("usage: mygit hash-object <flag> <file>"))
+		}
+
+		if os.Args[3] != "-w" {
+			must(fmt.Errorf("usage: mygit hash-object -w <file>"))
+		}
 		fmt.Printf("hash-object command")
+		must(hashObjectCMD(os.Args[4]))
 	case "ls-tree":
 		fmt.Printf("ls-tree command")
 	case "write-tree":

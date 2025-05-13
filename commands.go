@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -41,4 +43,37 @@ func catFileCMD(hash string) error {
 	fmt.Printf("%s", content)
 	return nil
 
+}
+
+func hashObjectCMD(fileName string) error {
+	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0644)
+
+	if err != nil {
+		return fmt.Errorf("error in reading file %w", err)
+	}
+
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return fmt.Errorf("error in reading file %w", err)
+	}
+
+	contentToWrite := gitObject("blob", content)
+	fileSHA, err := calculateSHA(contentToWrite)
+	if err != nil {
+		return fmt.Errorf("error in calculating SHA")
+	}
+	newFile, err := createObjectFile(fileSHA)
+	if err != nil {
+		return fmt.Errorf("error in creating the object file")
+	}
+
+	err = writeZipContent(newFile, bytes.NewReader(contentToWrite))
+	if err != nil {
+		return fmt.Errorf("error writing to the object folder")
+	}
+
+	fmt.Println("File SHA: ", fileSHA)
+	return nil
 }
