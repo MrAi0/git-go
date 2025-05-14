@@ -41,8 +41,8 @@ func catFileCMD(hash string) error {
 		return fmt.Errorf("hash is not of type blob is %s", objectType)
 	}
 	fmt.Printf("%s", content)
-	return nil
 
+	return nil
 }
 
 func hashObjectCMD(fileName string) error {
@@ -75,5 +75,34 @@ func hashObjectCMD(fileName string) error {
 	}
 
 	fmt.Println("File SHA: ", fileSHA)
+	return nil
+}
+
+func lsTreeCMD(hash string) error {
+	file, err := getFile(hash)
+	if err != nil {
+		return fmt.Errorf("ks tree command: get file from hash: %w", err)
+	}
+
+	defer file.Close()
+
+	text, objectType, err := readFile(file)
+	if err != nil {
+		return fmt.Errorf("error in reading object file: %w", err)
+	}
+
+	if objectType != "tree" {
+		return fmt.Errorf("object not of type tree")
+	}
+
+	tree, err := parseTreeObject(text)
+	if err != nil {
+		return fmt.Errorf("error in reading tree object")
+	}
+
+	for i := range tree {
+		fmt.Println(tree[i].Name)
+	}
+
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 func errorPrintf(format string, a ...any) {
@@ -154,4 +155,45 @@ func writeZipContent(w io.Writer, content io.Reader) error {
 	}
 
 	return nil
+}
+
+func parseTreeObject(content []byte) ([]GitTree, error) {
+
+	res := []GitTree{}
+
+	nameStart := 0
+	spaceStart := 0
+
+	for i := 0; i < len(content); i++ {
+		curr := GitTree{}
+		if content[i] == ' ' {
+			fileMode := content[spaceStart:i]
+			mode, err := strconv.Atoi(string(fileMode))
+			if err != nil {
+				return nil, err
+			}
+
+			curr.Mode = fs.FileMode(mode)
+			nameStart = i + 1
+		}
+
+		if content[i] == 0 {
+			name := content[nameStart:i]
+
+			if i+1+20 > len(content) {
+				return nil, fmt.Errorf("unexpected end of content while reading SHA")
+			}
+
+			var sha [20]byte
+			copy(sha[:], content[i+1:i+1+20])
+
+			curr.Name = string(name)
+			curr.SHA = sha
+
+			spaceStart = i + 21
+			i += 20
+			res = append(res, curr)
+		}
+	}
+	return res, nil
 }
