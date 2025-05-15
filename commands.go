@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -104,5 +105,16 @@ func lsTreeCMD(hash string) error {
 		fmt.Println(tree[i].Name)
 	}
 
+	return nil
+}
+
+func wirteTreeCMD() error {
+	treeSHA, err := writeTree(".")
+
+	if err != nil {
+		return fmt.Errorf("error in writing tree %w", err)
+	}
+
+	fmt.Println(hex.EncodeToString(treeSHA[:]))
 	return nil
 }

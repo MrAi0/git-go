@@ -48,6 +48,11 @@ func main() {
 		fmt.Printf("ls-tree command")
 		must(lsTreeCMD(os.Args[4]))
 	case "write-tree":
+		if len(os.Args) != 3 {
+			must(fmt.Errorf("usage: mygit write-tree"))
+		}
+
+		must(wirteTreeCMD())
 		fmt.Printf("write-tree command")
 	case "commit-tree":
 		fmt.Printf("commit-tree command")

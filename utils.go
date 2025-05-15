@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 )
 
@@ -100,22 +101,29 @@ func calculateSHA(content []byte) (string, error) {
 	return sha, nil
 }
 
-func getRawSHA(content []byte) ([]byte, error) {
+func getRawSHA(content []byte) ([20]byte, error) {
 	hash := sha1.New()
 
-	_, err := hash.Write(content)
+	n, err := hash.Write(content)
 
 	if err != nil {
-		return []byte{}, err
+		return [20]byte{}, err
+	}
+
+	if n != len(content) {
+		return [20]byte{}, fmt.Errorf("mismatch in the bytes and content %d and %d", n, len(content))
 	}
 
 	hashSum := hash.Sum(nil)
 
 	if len(hashSum) != 20 {
-		return []byte{}, fmt.Errorf("malformed hash created with %d bytes", len(hashSum))
+		return [20]byte{}, fmt.Errorf("malformed hash created with %d bytes", len(hashSum))
 	}
 
-	return []byte(hashSum), nil
+	var resArray [20]byte
+	copy(resArray[:], hashSum)
+
+	return resArray, nil
 }
 
 func createObjectFile(sha string) (*os.File, error) {
@@ -129,8 +137,6 @@ func createObjectFile(sha string) (*os.File, error) {
 	if err != nil && !os.IsExist(err) {
 		return nil, err
 	}
-
-	fmt.Println("Hash--->", sha)
 
 	return os.Create(fmt.Sprintf("./.git/objects/%s/%s", dir, rest))
 }
@@ -196,4 +202,141 @@ func parseTreeObject(content []byte) ([]GitTree, error) {
 		}
 	}
 	return res, nil
+}
+
+func writeTree(dirPath string) ([20]byte, error) {
+	var buffer bytes.Buffer
+	entries := []GitTree{}
+
+	err := filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+
+		if err != nil {
+			return fmt.Errorf("error accessing %s: %w", path, err)
+		}
+
+		if d.IsDir() && d.Name() == ".git" {
+			return filepath.SkipDir
+		}
+
+		if d.IsDir() {
+			if path == dirPath {
+				return nil
+			}
+
+			subTreeSHA, err := writeTree(path)
+			if err != nil {
+				return err
+			}
+			entries = append(entries, GitTree{
+				Mode:    d.Type(),
+				GitMode: "40000",
+				Name:    d.Name(),
+				SHA:     subTreeSHA,
+			})
+
+			return filepath.SkipDir
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("open file %s: %w", path, err)
+		}
+		defer file.Close()
+
+		fileContent, err := io.ReadAll(file)
+		if err != nil {
+			return fmt.Errorf("read file %s: %w", path, err)
+		}
+
+		fullContent := gitObject("blob", fileContent)
+
+		rawSHA, err := getRawSHA(fullContent)
+		if err != nil {
+			return fmt.Errorf("calculate file SHA for %s: %w", path, err)
+		}
+
+		mode := "100644" // Default mode for regular files
+		if d.Type().Perm()&0111 != 0 {
+			mode = "100755"
+		}
+
+		entries = append(entries, GitTree{
+			Mode:    d.Type(),
+			GitMode: mode,
+			Name:    d.Name(),
+			SHA:     rawSHA,
+		})
+		return nil
+
+	})
+
+	if err != nil {
+		return [20]byte{}, err
+	}
+
+	_, err = GitTrees(entries).writeTo(&buffer)
+	if err != nil {
+		return [20]byte{}, err
+	}
+
+	return bufferToFile(&buffer)
+}
+
+func (t GitTrees) writeTo(w io.Writer) (int64, error) {
+	sort.Slice(t, func(i, j int) bool {
+		return t[i].Name < t[j].Name
+	})
+
+	var n int64
+
+	for _, entry := range t {
+		n1, err := fmt.Fprintf(w, "%s %s", entry.GitMode, entry.Name)
+		if err != nil {
+			return n, err
+		}
+
+		n += int64(n1)
+		n2, err := w.Write([]byte{0})
+		if err != nil {
+			return n, err
+		}
+
+		n += int64(n2)
+		n3, err := w.Write(entry.SHA[:])
+		if err != nil {
+			return n, err
+		}
+
+		n += int64(n3)
+
+	}
+
+	return n, nil
+}
+
+func bufferToFile(buffer *bytes.Buffer) ([20]byte, error) {
+	treeContent := buffer.Bytes()
+
+	treeRawSHA, err := getRawSHA((gitObject("tree", treeContent)))
+	if err != nil {
+		return [20]byte{}, err
+	}
+
+	treeSHA := hex.EncodeToString(treeRawSHA[:])
+	treeFile, err := createObjectFile(treeSHA)
+	if err != nil {
+		if os.IsExist(err) {
+			return treeRawSHA, nil
+		}
+		return [20]byte{}, fmt.Errorf("couldn't create tree object file: %w", err)
+	}
+
+	defer treeFile.Close()
+	err = writeZipContent(treeFile, bytes.NewReader(gitObject("tree", treeContent)))
+
+	if err != nil {
+		return [20]byte{}, err
+	}
+
+	return treeRawSHA, nil
 }

@@ -8,3 +8,5 @@ type GitTree struct {
 	Name    string
 	SHA     [20]byte
 }
+
+type GitTrees []GitTree
