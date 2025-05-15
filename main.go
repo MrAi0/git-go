@@ -37,12 +37,13 @@ func main() {
 		fmt.Printf("hash-object command")
 		must(hashObjectCMD(os.Args[4]))
 	case "ls-tree":
+		fmt.Println(os.Args)
 		if len(os.Args) != 5 {
-			must(fmt.Errorf("usage: mygit cat-file <flag> <file>"))
+			must(fmt.Errorf("usage: mygit ls-tree <flag> <tree_sha>"))
 		}
 
-		if os.Args[2] != "--name-only" {
-			must(fmt.Errorf("usage: mygit cat-file --name-only <tree_sha>"))
+		if os.Args[3] != "--name-only" {
+			must(fmt.Errorf("usage: mygit ls-tree --name-only <tree_sha>"))
 		}
 		fmt.Printf("ls-tree command")
 		must(lsTreeCMD(os.Args[4]))
