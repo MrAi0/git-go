@@ -118,3 +118,37 @@ func wirteTreeCMD() error {
 	fmt.Println(hex.EncodeToString(treeSHA[:]))
 	return nil
 }
+
+func commitTreeCMD(treeSHA, commitSHA, commitMsg string) error {
+	if len(treeSHA) != 40 {
+		return fmt.Errorf("invalid treeSHA")
+	}
+
+	if len(commitSHA) != 40 {
+		return fmt.Errorf("invalid commitSHA")
+	}
+
+	content, err := writeCommitContent(treeSHA, commitMsg, commitSHA)
+	if err != nil {
+		return fmt.Errorf("write commit file: %w", err)
+	}
+
+	fullContent := gitObject("commit", content)
+
+	fullContentSHA, err := calculateSHA(fullContent)
+	if err != nil {
+		return fmt.Errorf("calculate SHA: %w", err)
+	}
+
+	file, err := createObjectFile(fullContentSHA)
+	if err != nil {
+		return fmt.Errorf("create object file: %w", err)
+	}
+	err = writeZipContent(file, bytes.NewReader(fullContent))
+	if err != nil {
+		return fmt.Errorf("write object file %s", err)
+	}
+
+	fmt.Printf("%s", fullContentSHA)
+	return nil
+}

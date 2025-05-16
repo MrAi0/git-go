@@ -55,6 +55,15 @@ func main() {
 		must(wirteTreeCMD())
 		fmt.Printf("write-tree command")
 	case "commit-tree":
+		if len(os.Args) != 8 {
+			must(fmt.Errorf("usage: mygit commit-tree <tree-sha> -p <commit-sha> -m <msg>"))
+		}
+
+		if os.Args[4] != "-p" || os.Args[6] != "-m" {
+			must(fmt.Errorf("usage: mygit commit-tree <tree-sha> -p <commit-sha> -m <msg>"))
+		}
+
+		must(commitTreeCMD(os.Args[3], os.Args[5], os.Args[7]))
 		fmt.Printf("commit-tree command")
 	case "clone":
 		fmt.Printf("clone command")

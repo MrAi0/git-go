@@ -10,3 +10,8 @@ type GitTree struct {
 }
 
 type GitTrees []GitTree
+
+const (
+	defaultName    = "TestUser"
+	defaultEmailID = "testuser@gmail.com"
+)

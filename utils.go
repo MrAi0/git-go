@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"time"
 )
 
 func errorPrintf(format string, a ...any) {
@@ -339,4 +340,55 @@ func bufferToFile(buffer *bytes.Buffer) ([20]byte, error) {
 	}
 
 	return treeRawSHA, nil
+}
+
+func writeCommitContent(treeSHA, commitMsg string, parentSHA ...string) ([]byte, error) {
+	var buffer bytes.Buffer
+
+	_, err := buffer.WriteString(fmt.Sprintf("tree %s\n", treeSHA))
+	if err != nil {
+		return nil, fmt.Errorf("write tree: %w", err)
+	}
+
+	for i := range parentSHA {
+		_, err := buffer.WriteString(fmt.Sprintf("parent %s\n", parentSHA[i]))
+		if err != nil {
+			return nil, fmt.Errorf("write parent %w", err)
+		}
+	}
+	now := time.Now()
+	_, err = buffer.WriteString(getAuthorCommiterString("author", now))
+	if err != nil {
+		return nil, fmt.Errorf("write author: %w", err)
+	}
+
+	_, err = buffer.WriteString(getAuthorCommiterString("committer", now))
+	if err != nil {
+		return nil, fmt.Errorf("write commiter: %w", err)
+	}
+
+	err = buffer.WriteByte('\n')
+	if err != nil {
+		return nil, fmt.Errorf("write new line %w", err)
+	}
+
+	_, err = buffer.WriteString(commitMsg + "\n")
+	if err != nil {
+		return nil, fmt.Errorf("write commit msg: %w", err)
+	}
+
+	return buffer.Bytes(), nil
+}
+
+func getAuthorCommiterString(role string, time time.Time) string {
+	timeUnix := time.Unix()
+	_, offset := time.Zone()
+	offsetHours := offset / 3600
+	offsetMinutes := (offset % 3600) / 60
+	tzSign := "+"
+	if offset < 0 {
+		tzSign = "-"
+	}
+
+	return fmt.Sprintf("%s %s <%s> %d %s%02d%02d\n", role, defaultName, defaultEmailID, timeUnix, tzSign, offsetHours, offsetMinutes)
 }
