@@ -15,3 +15,8 @@ const (
 	defaultName    = "TestUser"
 	defaultEmailID = "testuser@gmail.com"
 )
+
+type GitRefs struct {
+	Hash string
+	Name string
+}

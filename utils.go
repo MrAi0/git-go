@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,7 +34,7 @@ func getFile(hash string) (*os.File, error) {
 	path := filepath.Join(".git/objects", dir, rem)
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("no object found %w", hash)
+		return nil, fmt.Errorf("no object found %s", hash)
 	}
 	return file, nil
 }
@@ -391,4 +393,62 @@ func getAuthorCommiterString(role string, time time.Time) string {
 	}
 
 	return fmt.Sprintf("%s %s <%s> %d %s%02d%02d\n", role, defaultName, defaultEmailID, timeUnix, tzSign, offsetHours, offsetMinutes)
+}
+
+func fetchPackFile(url string) ([]byte, error) {
+	completeUrl := fmt.Sprintf("%s/info/refs?service=git-upload-pack", url)
+
+	resp, err := http.Get(completeUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch response")
+	}
+
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Non-OK HTTP status")
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body")
+	}
+
+	return body, nil
+}
+
+func extractRefs(packContent []byte) ([]GitRefs, error) {
+	packContentList := bytes.Split(packContent, []byte("\n"))
+	refs := make([]GitRefs, 0, len(packContentList)-2)
+	for index, contentLine := range packContentList {
+		if bytes.Equal(contentLine, []byte{'0', '0', '0', '0'}) {
+			break
+		}
+
+		if index == 0 {
+			continue
+		}
+
+		contentLine = contentLine[4:]
+		if index == 1 {
+			contentLine = contentLine[4:]
+		}
+		hashBytes := contentLine[:40]
+		contentLine = contentLine[40:]
+		if contentLine[0] != ' ' {
+			panic("error thrown")
+		}
+
+		contentLine := contentLine[1:]
+		contentPart := bytes.Split(contentLine, []byte{0})
+		nameBytes := contentPart[0]
+		refs = append(refs, GitRefs{
+			Hash: string(hashBytes),
+			Name: string(nameBytes),
+		})
+	}
+	return refs, nil
+}
+
+func fetchRefs(refs []GitRefs) {
+
 }

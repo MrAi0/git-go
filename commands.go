@@ -152,3 +152,20 @@ func commitTreeCMD(treeSHA, commitSHA, commitMsg string) error {
 	fmt.Printf("%s", fullContentSHA)
 	return nil
 }
+
+func cloneCMD(url string) error {
+	packContent, err := fetchPackFile(url)
+	if err != nil {
+		return fmt.Errorf("could not fetch pack file: %w", err)
+	}
+
+	// packStrContent := string(packContent)
+	refsArr, err := extractRefs(packContent)
+	if err != nil {
+		return fmt.Errorf("error extracting refs %w", err)
+	}
+	// fmt.Println(packStrContent)
+	fmt.Println(refsArr)
+
+	return nil
+}

@@ -66,7 +66,11 @@ func main() {
 		must(commitTreeCMD(os.Args[3], os.Args[5], os.Args[7]))
 		fmt.Printf("commit-tree command")
 	case "clone":
+		if len(os.Args) != 4 {
+			must(fmt.Errorf("usage: mygit clone <url>"))
+		}
 		fmt.Printf("clone command")
+		must(cloneCMD(os.Args[3]))
 	default:
 		fmt.Printf("unknown command %s", command)
 	}
