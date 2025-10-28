@@ -70,7 +70,7 @@ func main() {
 			must(fmt.Errorf("usage: mygit clone <url>"))
 		}
 		fmt.Printf("clone command")
-		must(cloneCMD(os.Args[3]))
+		must(cloneCMD(os.Args[2], os.Args[3]))
 	default:
 		fmt.Printf("unknown command %s", command)
 	}

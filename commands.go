@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/codecrafters-io/git-starter-go/cmd/clone"
+	"golang.org/x/exp/slices"
 )
 
 func initCMD() error {
@@ -153,19 +156,61 @@ func commitTreeCMD(treeSHA, commitSHA, commitMsg string) error {
 	return nil
 }
 
-func cloneCMD(url string) error {
-	packContent, err := fetchPackFile(url)
-	if err != nil {
-		return fmt.Errorf("could not fetch pack file: %w", err)
+func cloneCMD(repoLink, dirToCloneAt string) error {
+	err := os.MkdirAll(dirToCloneAt, 0755)
+
+	if err != nil && !os.IsExist(err) {
+		return fmt.Errorf("create the dir to clone the repo: %w", err)
 	}
 
-	// packStrContent := string(packContent)
-	refsArr, err := extractRefs(packContent)
+	err = os.Chdir(dirToCloneAt)
 	if err != nil {
-		return fmt.Errorf("error extracting refs %w", err)
+		return fmt.Errorf("couldn't change the dir: %w", err)
 	}
-	// fmt.Println(packStrContent)
-	fmt.Println(refsArr)
 
+	err = initCMD()
+	if err != nil {
+		return fmt.Errorf("couldn't initialize git: %w", err)
+	}
+
+	gitRefResponse, err := clone.GitSmartProtocolGetRefs(repoLink)
+	if err != nil {
+		return fmt.Errorf("git smart protocol for ref fetching: %w", err)
+	}
+
+	refs, err := clone.GetRefList(gitRefResponse)
+	if err != nil {
+		return fmt.Errorf("git smart protocol for ref list parsing: %w", err)
+	}
+
+	packfileContent, err := clone.RefDiscovery(repoLink, refs)
+	if err != nil {
+		return fmt.Errorf("git smart protocol for ref discovery: %w", err)
+	}
+	objects, err := clone.ReadPackFile(packfileContent)
+	if err != nil {
+		return err
+	}
+
+	err = clone.WriteObjects(dirToCloneAt, objects)
+	if err != nil {
+		return err
+	}
+	headIdx := slices.IndexFunc(refs, func(ref clone.GitRef) bool {
+		return ref.Name == "HEAD"
+	})
+
+	if headIdx == -1 {
+		return fmt.Errorf("head index not found: %w", err)
+	}
+	headRef := refs[headIdx]
+	treeSHA, err := GetTreeHashFromCommit(headRef.Hash, ".")
+	if err != nil {
+		return err
+	}
+	err = RenderTree(treeSHA, ".", ".")
+	if err != nil {
+		return err
+	}
 	return nil
 }

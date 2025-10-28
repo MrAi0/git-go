@@ -14,7 +14,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/codecrafters-io/git-starter-go/cmd/common"
 )
 
 func errorPrintf(format string, a ...any) {
@@ -451,4 +454,146 @@ func extractRefs(packContent []byte) ([]GitRefs, error) {
 
 func fetchRefs(refs []GitRefs) {
 
+}
+
+func GetTreeHashFromCommit(commitHash, gitDir string) (string, error) {
+	objFile, err := common.GetFileFromHash(gitDir, commitHash)
+	if err != nil {
+		return "", fmt.Errorf("GetTreeHashFromCommit: get file from hash: %w", err)
+	}
+	content, objType, err := common.ReadObjectFile(objFile)
+	if err != nil {
+		return "", fmt.Errorf("GetTreeHashFromCommit: read object file: %w", err)
+	}
+	if objType != "commit" {
+		return "", fmt.Errorf("GetTreeHashFromCommit: expected commit, got %s", objType)
+	}
+	// Commit object content is like:
+	// tree <tree-hash>
+	// parent <parent-hash>
+	// author ...
+	// committer ...
+	// <blank line>
+	// Commit message
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "tree ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "tree ")), nil
+		}
+	}
+	return "", fmt.Errorf("tree hash not found in commit object")
+}
+
+func RenderTree(hash, workingDir, repoRoot string) error {
+	objFile, err := common.GetFileFromHash(repoRoot, hash)
+	if err != nil {
+		return fmt.Errorf("RenderTree: get file from hash: %w", err)
+	}
+	fileContent, objType, err := common.ReadObjectFile(objFile)
+	if err != nil {
+		return fmt.Errorf("RenderTree: read the object file: %w", err)
+	}
+	if objType != "tree" {
+		return fmt.Errorf("RenderTree: got the object type %q for render Tree", objType)
+	}
+	treeEntry, err := ParseTreeObjectBody(fileContent)
+	if err != nil {
+		return fmt.Errorf("RenderTree: could not parse tree: %w", err)
+	}
+	for _, entry := range treeEntry {
+		entryPath := filepath.Join(workingDir, entry.Name)
+		shaHex := hex.EncodeToString(entry.SHA[:])
+
+		switch entry.GitMode {
+		case "40000":
+			err := os.MkdirAll(entryPath, 0755)
+			if err != nil {
+				return fmt.Errorf("RenderTree: mkdir %s: %w", entryPath, err)
+			}
+			err = RenderTree(shaHex, entryPath, repoRoot)
+			if err != nil {
+				return err
+			}
+		case "100644", "100755":
+			objFile, err := common.GetFileFromHash(repoRoot, shaHex)
+			if err != nil {
+				return fmt.Errorf("RenderTree: get file for blob %s: %w", shaHex, err)
+			}
+			content, objType, err := common.ReadObjectFile(objFile)
+			if err != nil {
+				return fmt.Errorf("RenderTree: read blob file: %w", err)
+			}
+			if objType != "blob" {
+				return fmt.Errorf("RenderTree: expected blob, got %s", objType)
+			}
+			err = os.WriteFile(entryPath, content, entry.Mode)
+			if err != nil {
+				return fmt.Errorf("RenderTree: writing blob to file %s: %w", entryPath, err)
+			}
+		default:
+			return fmt.Errorf(
+				"RenderTree: unsupported Git mode %q for entry %q",
+				entry.GitMode,
+				entry.Name,
+			)
+		}
+	}
+	return nil
+}
+
+func ParseTreeObjectBody(content []byte) ([]GitTree, error) {
+	// a tree object is of the form
+	//// tree <size>\0
+	//// <mode> <name>\0<20_byte_sha>
+	//// <mode> <name>\0<20_byte_sha>
+	result, i := []GitTree{}, 0
+
+	for i < len(content) {
+		// Parse mode
+		modeStart := i
+		for content[i] != ' ' {
+			i++
+		}
+		modeStr := string(content[modeStart:i])
+		mode := modeFromGit(modeStr)
+		i++ // Skip the space
+
+		// Parse name
+		nameStart := i
+		for content[i] != 0 {
+			i++
+		}
+		name := string(content[nameStart:i])
+		i++ // Skip the null terminator
+
+		// Parse SHA (20 bytes)
+		if i+20 > len(content) {
+			return nil, fmt.Errorf("unexpected end of content while reading SHA")
+		}
+		var sha [20]byte
+		copy(sha[:], content[i:i+20])
+		i += 20
+
+		result = append(result, GitTree{
+			Mode:    mode,
+			GitMode: modeStr,
+			Name:    name,
+			SHA:     sha,
+		})
+	}
+
+	return result, nil
+}
+
+func modeFromGit(gitMode string) os.FileMode {
+	switch gitMode {
+	case "100644":
+		return 0644
+	case "100755":
+		return 0755
+	case "40000":
+		return os.ModeDir | 0755
+	default:
+		return 0644 // fallback
+	}
 }
